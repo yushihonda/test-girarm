@@ -30,9 +30,10 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		D091D4C32E630B5B006B43B0 /* Exceptions for "Girarm" folder in "Girarm" target */ = {
+		D091D4E72E630D0A006B43B0 /* Exceptions for "Girarm" folder in "Girarm" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Assets.xcassets,
 				Info.plist,
 			);
 			target = D091D49A2E630B5A006B43B0 /* Girarm */;
@@ -43,7 +44,7 @@
 		D091D49D2E630B5A006B43B0 /* Girarm */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				D091D4C32E630B5B006B43B0 /* Exceptions for "Girarm" folder in "Girarm" target */,
+				D091D4E72E630D0A006B43B0 /* Exceptions for "Girarm" folder in "Girarm" target */,
 			);
 			path = Girarm;
 			sourceTree = "<group>";
@@ -289,7 +290,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Girarm/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -316,7 +317,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Girarm/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
