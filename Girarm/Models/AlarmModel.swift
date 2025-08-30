@@ -163,10 +163,10 @@ class AlarmManager: ObservableObject {
     }
     
     private func scheduleNotification(for alarm: AlarmModel) {
-        // 通知スケジュール実装
+        AlarmScheduler.shared.scheduleAlarm(alarm)
     }
     
     private func cancelNotification(for alarm: AlarmModel) {
-        // 通知キャンセル実装
+        AlarmScheduler.shared.cancelAlarm(alarm)
     }
 }
