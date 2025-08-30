@@ -4,6 +4,7 @@ import AVFoundation
 import Vision
 import Speech
 import CoreImage
+import CoreGraphics
 
 protocol SensorManagerDelegate: AnyObject {
     func sensorManager(_ manager: SensorManager, didDetectPosture isCorrect: Bool, progress: Double)
@@ -30,6 +31,9 @@ class SensorManager: NSObject {
     private var faceDetectionTimer: Timer?
     private var currentExpressionProgress: Double = 0.0
     private let faceDetectionRequest = VNDetectFaceRectanglesRequest()
+    private let faceLandmarksRequest = VNDetectFaceLandmarksRequest()
+    private var lastExpressionAnalysisTime: TimeInterval = 0
+    private let minExpressionAnalysisInterval: TimeInterval = 0.3
     
     // MARK: - Voice Recognition
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ja_JP"))
@@ -82,10 +86,11 @@ class SensorManager: NSObject {
     
     private func processMotionData(_ motion: CMDeviceMotion) {
         let gravity = motion.gravity
-        
-        // Z軸方向（縦向き）の重力を検出
+        // 縦向き（ポートレート）ではY軸成分が大きく、Z軸は小さくなる
+        let yGravity = gravity.y
         let zGravity = gravity.z
-        let isUpright = abs(zGravity) > 0.8  // 縦向きの閾値
+        // 許容しきい値（必要に応じて微調整）
+        let isUpright = abs(yGravity) > 0.85 && abs(zGravity) < 0.35
         
         if isUpright {
             currentPostureProgress = min(1.0, currentPostureProgress + 0.1)
@@ -151,37 +156,88 @@ class SensorManager: NSObject {
     }
     
     private func startExpressionDetection() {
-        // カメラセッションは既にLight Detectionで開始済み
-        faceDetectionTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.simulateExpressionDetection()
-        }
+        // 解析は captureOutput 内でフレームに応じて実行
     }
     
     private func stopExpressionDetection() {
         faceDetectionTimer?.invalidate()
     }
     
-    private func simulateExpressionDetection() {
-        // 実際の実装では、Vision frameworkを使用して表情分析
-        // ここではランダムシミュレーション（実際のアプリでは表情認識APIを使用）
-        let isSmiling = Bool.random()
+    // Visionで表情（スマイル）解析
+    private func analyzeExpression(from imageBuffer: CVPixelBuffer) {
+        let now = CFAbsoluteTimeGetCurrent()
+        if now - lastExpressionAnalysisTime < minExpressionAnalysisInterval { return }
+        lastExpressionAnalysisTime = now
         
-        if isSmiling {
-            currentExpressionProgress = min(1.0, currentExpressionProgress + 0.3)
-        } else {
-            currentExpressionProgress = max(0.0, currentExpressionProgress - 0.1)
+        let requestHandler = VNImageRequestHandler(cvPixelBuffer: imageBuffer, orientation: .leftMirrored, options: [:])
+        let request = VNDetectFaceLandmarksRequest { [weak self] request, error in
+            guard let self = self else { return }
+            var isSmiling = false
+            defer {
+                DispatchQueue.main.async {
+                    if isSmiling {
+                        self.currentExpressionProgress = min(1.0, self.currentExpressionProgress + 0.25)
+                    } else {
+                        self.currentExpressionProgress = max(0.0, self.currentExpressionProgress - 0.08)
+                    }
+                    self.delegate?.sensorManager(self, didDetectExpression: isSmiling, progress: self.currentExpressionProgress)
+                }
+            }
+            guard error == nil,
+                  let observations = request.results as? [VNFaceObservation],
+                  let face = observations.first,
+                  let landmarks = face.landmarks,
+                  let outerLips = landmarks.outerLips,
+                  let leftEye = landmarks.leftEye,
+                  let rightEye = landmarks.rightEye else {
+                return
+            }
+            // 口の横幅と縦幅の比率、および口角の上がりを簡易判定
+            let points = outerLips.normalizedPoints
+            guard points.count > 5 else { return }
+            // 左右端の推定（最小x, 最大x）
+            let minX = points.min(by: { $0.x < $1.x })?.x ?? 0
+            let maxX = points.max(by: { $0.x < $1.x })?.x ?? 0
+            let minY = points.min(by: { $0.y < $1.y })?.y ?? 0
+            let maxY = points.max(by: { $0.y < $1.y })?.y ?? 0
+            let mouthWidth = maxX - minX
+            let mouthHeight = maxY - minY
+            let ratio = mouthHeight > 0 ? (mouthWidth / mouthHeight) : 0
+            
+            // 目の高さ平均より口角（外唇の左右上点）が高いかどうかの簡易チェック
+            let eyeAvgY = (leftEye.normalizedPoints.map { $0.y }.average + rightEye.normalizedPoints.map { $0.y }.average) / 2.0
+            let leftCornerY = points.min(by: { $0.x < $1.x })?.y ?? 0
+            let rightCornerY = points.max(by: { $0.x < $1.x })?.y ?? 0
+            let cornersHigherThanMouthCenter = ((leftCornerY + rightCornerY) / 2.0) > ((minY + maxY) / 2.0)
+            
+            // しきい値は経験的に設定
+            if ratio > 2.0 && cornersHigherThanMouthCenter && mouthWidth > 0.2 {
+                isSmiling = true
+            }
         }
-        
-        delegate?.sensorManager(self, didDetectExpression: isSmiling, progress: currentExpressionProgress)
+        do {
+            try requestHandler.perform([request])
+        } catch {
+            // 解析失敗時はスキップ
+        }
     }
     
     // MARK: - Voice Recognition
     private func startVoiceRecognition() {
-        // 権限確認
+        // 権限確認（音声認識 + マイク）
         SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
-            DispatchQueue.main.async {
-                if authStatus == .authorized {
-                    self?.startRecording()
+            guard let self = self else { return }
+            guard authStatus == .authorized else {
+                print("Speech recognition not authorized: \(authStatus.rawValue)")
+                return
+            }
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self.startRecording()
+                    } else {
+                        print("Microphone permission denied")
+                    }
                 }
             }
         }
@@ -217,10 +273,14 @@ class SensorManager: NSObject {
             self.recognitionTask = nil
         }
         
-        // オーディオセッションを設定
+        // オーディオセッションを設定（同時再生+録音）
         let audioSession = AVAudioSession.sharedInstance()
         do {
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setCategory(
+                .playAndRecord,
+                mode: .spokenAudio,
+                options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP, .duckOthers]
+            )
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             print("Audio session setup failed: \(error)")
@@ -244,7 +304,10 @@ class SensorManager: NSObject {
             
             if error != nil || result?.isFinal == true {
                 self.audioEngine.stop()
-                inputNode.removeTap(onBus: 0)
+                if self.isAudioTapInstalled {
+                    inputNode.removeTap(onBus: self.inputBus)
+                    self.isAudioTapInstalled = false
+                }
                 self.recognitionRequest = nil
                 self.recognitionTask = nil
                 
@@ -320,6 +383,9 @@ extension SensorManager: AVCaptureVideoDataOutputSampleBufferDelegate {
                 self.delegate?.sensorManager(self, didDetectLight: brightness, progress: self.currentLightProgress)
             }
         }
+
+        // 表情解析も同フレームで実施
+        self.analyzeExpression(from: imageBuffer)
     }
     
     private func calculateBrightness(from cgImage: CGImage) -> Double {
@@ -374,5 +440,14 @@ extension SensorManager {
             currentVoiceProgress = 1.0
             delegate?.sensorManager(self, didDetectVoice: "おはよう", progress: 1.0)
         }
+    }
+}
+
+// MARK: - Math Helpers
+private extension Array where Element == CGFloat {
+    var average: CGFloat {
+        guard !isEmpty else { return 0 }
+        let sum = reduce(0, +)
+        return sum / CGFloat(count)
     }
 }
