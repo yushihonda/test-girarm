@@ -144,11 +144,6 @@ class AlarmManager: ObservableObject {
             challengeProgresses[index].isCompleted = true
             challengeProgresses[index].progress = 1.0
         }
-        
-        // 全てのチャレンジが完了したかチェック
-        if challengeProgresses.allSatisfy({ $0.isCompleted }) {
-            stopAlarm()
-        }
     }
     
     func updateChallengeProgress(_ challengeType: ChallengeType, progress: Double) {

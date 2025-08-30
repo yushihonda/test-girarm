@@ -12,6 +12,7 @@ class AlarmViewController: UIViewController {
     private var timer: Timer?
     private var lastUIUpdateTime: TimeInterval = 0
     private let minUIUpdateInterval: TimeInterval = 0.25
+    private var didCompleteAllChallenges: Bool = false
     
     // MARK: - UI Components
     private let scrollView = UIScrollView()
@@ -248,12 +249,19 @@ class AlarmViewController: UIViewController {
         let totalCount = alarmManager.challengeProgresses.count
         
         if completedCount == totalCount && totalCount > 0 {
-            // 全チャレンジ完了
-            progressLabel.text = "🎉 おめでとうございます！\nアラームを停止します"
-            progressLabel.textColor = UIColor.green
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                self.dismiss(animated: true)
+            // 全チャレンジ完了（1回だけ処理）
+            if !didCompleteAllChallenges {
+                didCompleteAllChallenges = true
+                progressLabel.text = "🎉 おめでとうございます！\nアラームを停止します"
+                progressLabel.textColor = UIColor.green
+                // 先に停止してから閉じる
+                sensorManager?.stopMonitoring()
+                audioPlayer?.stop()
+                timer?.invalidate()
+                alarmManager.stopAlarm()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    self.dismiss(animated: true)
+                }
             }
         } else {
             progressLabel.text = "チャレンジ進行中... (\(completedCount)/\(totalCount))"
