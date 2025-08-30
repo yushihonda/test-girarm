@@ -10,8 +10,12 @@ class AlarmViewController: UIViewController {
     
     private var audioPlayer: AVAudioPlayer?
     private var timer: Timer?
+    private var lastUIUpdateTime: TimeInterval = 0
+    private let minUIUpdateInterval: TimeInterval = 0.25
     
     // MARK: - UI Components
+    private let scrollView = UIScrollView()
+    private let contentView = UIView()
     private let dismissButton = UIButton(type: .system)
     private let timeLabel = UILabel()
     private let alarmLabel = UILabel()
@@ -37,6 +41,13 @@ class AlarmViewController: UIViewController {
     private func setupUI() {
         view.backgroundColor = UIColor.systemBackground
         
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.alwaysBounceVertical = true
+        scrollView.showsVerticalScrollIndicator = true
+        view.addSubview(scrollView)
+        scrollView.addSubview(contentView)
+
         // 閉じるボタン
         dismissButton.setTitle("×", for: .normal)
         dismissButton.titleLabel?.font = UIFont.systemFont(ofSize: 32, weight: .light)
@@ -72,7 +83,7 @@ class AlarmViewController: UIViewController {
         
         // チャレンジスタックビュー
         challengesStackView.axis = .vertical
-        challengesStackView.distribution = .fillEqually
+        challengesStackView.distribution = .fill
         challengesStackView.spacing = 20
         challengesStackView.translatesAutoresizingMaskIntoConstraints = false
         
@@ -92,56 +103,74 @@ class AlarmViewController: UIViewController {
         micButton.translatesAutoresizingMaskIntoConstraints = false
         micButton.addTarget(self, action: #selector(toggleMic), for: .touchUpInside)
         
-        view.addSubview(dismissButton)
-        view.addSubview(headerSunView)
-        view.addSubview(bigGreetingLabel)
-        view.addSubview(timeLabel)
-        view.addSubview(alarmLabel)
-        view.addSubview(challengesStackView)
-        view.addSubview(progressLabel)
+        contentView.addSubview(dismissButton)
+        contentView.addSubview(headerSunView)
+        contentView.addSubview(bigGreetingLabel)
+        contentView.addSubview(timeLabel)
+        contentView.addSubview(alarmLabel)
+        contentView.addSubview(challengesStackView)
+        contentView.addSubview(progressLabel)
         view.addSubview(micButton)
         
         setupConstraints()
+        // マイクボタンと重ならないようにコンテンツの下余白を追加
+        let bottomSafeInset: CGFloat = 24
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 56 + bottomSafeInset + 16, right: 0)
+        scrollView.scrollIndicatorInsets = scrollView.contentInset
         setupChallengeViews()
     }
     
     private func setupConstraints() {
         NSLayoutConstraint.activate([
+            // スクロールビュー
+            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: micButton.topAnchor, constant: -16),
+            
+            // コンテンツビュー（スクロールコンテンツ）
+            contentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            
             // 閉じるボタン
-            dismissButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
-            dismissButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            dismissButton.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            dismissButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             dismissButton.widthAnchor.constraint(equalToConstant: 44),
             dismissButton.heightAnchor.constraint(equalToConstant: 44),
             
             // サンバースト風ヘッダ
-            headerSunView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
-            headerSunView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            headerSunView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 32),
+            headerSunView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             headerSunView.widthAnchor.constraint(equalToConstant: 240),
             headerSunView.heightAnchor.constraint(equalToConstant: 240),
             bigGreetingLabel.centerXAnchor.constraint(equalTo: headerSunView.centerXAnchor),
             bigGreetingLabel.centerYAnchor.constraint(equalTo: headerSunView.centerYAnchor),
             
             // 時刻
-            timeLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            timeLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             timeLabel.topAnchor.constraint(equalTo: headerSunView.bottomAnchor, constant: 8),
             
             // アラームラベル
-            alarmLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            alarmLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             alarmLabel.topAnchor.constraint(equalTo: timeLabel.bottomAnchor, constant: 20),
             
             // チャレンジビュー
-            challengesStackView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            challengesStackView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             challengesStackView.topAnchor.constraint(equalTo: alarmLabel.bottomAnchor, constant: 32),
-            challengesStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            challengesStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            challengesStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            challengesStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
             
             // プログレス
-            progressLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            progressLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -96),
-            progressLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            progressLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            progressLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
+            progressLabel.topAnchor.constraint(equalTo: challengesStackView.bottomAnchor, constant: 20),
+            progressLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            progressLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            progressLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -24),
 
-            // マイクボタン
+            // マイクボタン（固定）
             micButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             micButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
             micButton.heightAnchor.constraint(equalToConstant: 56),
@@ -236,7 +265,8 @@ class AlarmViewController: UIViewController {
     
     private func updateChallengeViews() {
         guard let alarmManager = alarmManager else { return }
-        
+        let now = CFAbsoluteTimeGetCurrent()
+        if now - lastUIUpdateTime < minUIUpdateInterval { return }
         for (index, arrangedSubview) in challengesStackView.arrangedSubviews.enumerated() {
             if let challengeView = arrangedSubview as? ChallengeView,
                index < alarmManager.challengeProgresses.count {
@@ -244,6 +274,7 @@ class AlarmViewController: UIViewController {
                 challengeView.updateProgress(progress.progress, isCompleted: progress.isCompleted)
             }
         }
+        lastUIUpdateTime = now
     }
     
     @objc private func dismissButtonTapped() {

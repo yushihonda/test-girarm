@@ -1,9 +1,13 @@
 import UIKit
+import UserNotifications
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // 通知の初期化とカテゴリ登録
+        _ = AlarmScheduler.shared
+        AlarmScheduler.shared.setupNotificationActions()
         return true
     }
 
